@@ -10,6 +10,7 @@ import { listPublicSources } from "@aihot/backend/publication/sources";
 import { loadTimeline } from "@aihot/backend/publication/timeline";
 import { loadForYou, parseForYouProfile } from "@aihot/backend/publication/foryou";
 import { loadDoc, loadExperienceIndex, loadSurvivalIndex, resolveDocRedirect } from "@aihot/backend/publication/docs";
+import { guide2Article, guide2Full, guide2Index } from "@aihot/backend/publication/guide-2";
 import { getTaxonomyTerms } from "@aihot/backend/taxonomy/terms";
 import { loadStoryFollowups } from "@aihot/backend/publication/followups";
 import { loadDevelopments, loadGroupReports } from "@aihot/backend/publication/groups";
@@ -91,6 +92,14 @@ export async function parseFilters(q: Record<string, string>): Promise<FilterPar
 }
 
 export function registerSite(app: FastifyInstance) {
+  app.get("/api/site/guide/2", siteHandler(async (_req, reply) => reply.send({ articles: guide2Index() })));
+  app.get("/api/site/guide/2/full", siteHandler(async (_req, reply) => reply.send({ articles: guide2Full() })));
+  app.get<{ Params: { slug: string } }>("/api/site/guide/2/:slug", siteHandler(async (req, reply) => {
+    const { slug } = req.params as { slug: string };
+    const article = guide2Article(slug);
+    if (!article) return sendProblem(req, reply, { status: 404, code: "not_found", detail: "Article not found." });
+    return reply.send({ article });
+  }));
   app.get("/api/site/meta", siteHandler(async (req, reply) => {
     return sendJsonWithEtag(req, reply, siteMeta(), { etagPrefix: "meta", cacheControl: "public, max-age=60, s-maxage=60" });
   }));
