@@ -161,7 +161,7 @@ test("home renders titles and developments without the hot strip, card summaries
 test("changelog renders the latest release", async () => {
   const response = await fetch(`${origin}/changelog`);
   assert.equal(response.status, 200);
-  const html = (await response.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
+  const html = await response.text();
   assert.match(html, /扩充校园信源，优化信息流和生存手册/);
   assert.match(html, /接入 84 个已核准的校园公众号/);
   assert.match(html, /移除消息列表中的 AI 评分和左侧时间点/);
