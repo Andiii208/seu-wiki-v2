@@ -22,6 +22,10 @@ import { loadSiteStats } from "@aihot/backend/site/stats";
 import { itemAvailability } from "@aihot/backend/publication/availability";
 import { listTopicSummaries, loadTopicPage } from "@aihot/backend/publication/topics";
 import { registerFeedback } from "./feedback.ts";
+import { SUBSCRIPTION_TAXONOMY } from "@aihot/industry/subscription-v2";
+import { loadSubscription } from "@aihot/backend/publication/subscription";
+import { memberPrincipal } from "@aihot/backend/member/auth";
+import { subscriptionExperimentEnabled } from "@aihot/backend/member/subscription-profile";
 
 import { loadHot, loadStoryDetail, resolveStory } from "@aihot/backend/publication/stories";
 import { loadSiteCodexResetPage, loadSiteCodexResetDay } from "@aihot/backend/publication/monitor";
@@ -92,6 +96,26 @@ export async function parseFilters(q: Record<string, string>): Promise<FilterPar
 }
 
 export function registerSite(app: FastifyInstance) {
+  // Subscription trial requires a member session. POST keeps profile fields out of URLs and history.
+  app.post("/api/site/subscription-preview", { bodyLimit: 32768 }, siteHandler(async (req, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("Vary", "Cookie");
+    if (!subscriptionExperimentEnabled()) return sendProblem(req, reply, { status: 404, code: "not_found", detail: "Not found.", cacheControl: "private, no-store" });
+    if (!await memberPrincipal(req.headers.cookie)) return reply.code(401).send({ error: "login_required" });
+    const body = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
+    const asOf = typeof body.asOf === "string" ? body.asOf : new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+    if (!/^20\d{2}-\d{2}-\d{2}$/.test(asOf) || !Number.isFinite(Date.parse(asOf)) || new Date(asOf).toISOString().slice(0,10) !== asOf) throw new BadRequest("invalid date");
+    const lane = body.lane === "possible" || body.lane === "excluded" || body.lane === "matched" ? body.lane : "feed";
+    const page = Math.max(1,Math.min(200,Math.floor(Number(body.page)||1)));
+    return reply.send(await loadSubscription({ profile: body.profile, asOf, lane, page, q: typeof body.q === "string" ? body.q.slice(0,100) : "" }));
+  }));
+  app.get("/api/site/subscription-taxonomy", siteHandler(async (req, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("Vary", "Cookie");
+    if (!subscriptionExperimentEnabled()) return sendProblem(req, reply, { status: 404, code: "not_found", detail: "Not found.", cacheControl: "private, no-store" });
+    if (!await memberPrincipal(req.headers.cookie)) return reply.code(401).send({ error: "login_required" });
+    return reply.send(SUBSCRIPTION_TAXONOMY);
+  }));
   app.get("/api/site/guide/2", siteHandler(async (_req, reply) => reply.send({ articles: guide2Index() })));
   app.get("/api/site/guide/2/full", siteHandler(async (_req, reply) => reply.send({ articles: guide2Full() })));
   app.get<{ Params: { slug: string } }>("/api/site/guide/2/:slug", siteHandler(async (req, reply) => {
